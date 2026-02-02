@@ -1,7 +1,7 @@
 # Offroad Semantic Scene Segmentation 🚙💨
 
 
-> **Hackathon Submission 2024**  
+> **Codezen2.0 Submission 2026**  
 > *Robust Terrain Analysis using DINOv2 Backbone & PSD-Net*
 
 ![Project Banner](Visual_Report/Visual_Report_V3_0.png)
