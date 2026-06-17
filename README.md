@@ -1,273 +1,83 @@
+# Offroad Semantic Scene Segmentation
 
-# AIʼs Offroad Semantic Scene Segmentation
-
-## 🏆 Team Information
-
-**Team Name:** ORCA
-**Project:** Offroad Semantic Scene Segmentation
+**PyTorch · DINOv2 · OpenCV · Albumentations**  
+*Hackathon project — Duality AI Offroad Challenge (Team ORCA)*
 
 ---
-
-## [PERFORMANCE REPORT](PERFORMANCE_REPORT.docx) 
-
-# 🌵 Project Overview
-
-This project implements a **hybrid Transformer–CNN semantic segmentation architecture** tailored for off-road desert environments using synthetic data from Duality AI's Falcon platform.
-
-Instead of a conventional U-Net, we design a **DINOv2-based transformer backbone fused with a convolutional feature pyramid neck**, enabling:
-
-* Global semantic reasoning (Transformer attention)
-* Local spatial refinement (CNN inductive bias)
-* Multi-scale dense prediction
-* Improved small-object sensitivity
-* Real-time inference performance
-
----
-
-# 🏗 Architecture Overview
-
-## Hybrid Transformer–CNN Segmentation Model
 
 <p align="center">
   <img src="docs/model_architecture.jpeg" alt="Model Architecture" width="900"/>
 </p>
 
----
+## Overview
 
-## 1️⃣ Backbone – DINOv2 (Vision Transformer)
-
-* **Input:** 512×512 crop
-* **Patch size:** 14
-* **Token grid:** 36×36
-* **Multi-depth feature extraction**
-* **Global self-attention**
-
-DINOv2 provides:
-
-* Self-supervised large-scale pretraining
-* Robust semantic embeddings
-* Strong generalization across domains
-* Dense patch-level feature representations
+Hybrid Transformer–CNN semantic segmentation model for off-road desert environments, trained on synthetic data from Duality AI's Falcon platform. Segments 10 terrain classes including rocks, vegetation, and navigable ground across challenging low-contrast scenes.
 
 ---
 
-## 2️⃣ Multi-Depth Feature Extraction
+## Architecture
 
-Instead of using only the final transformer block, features are extracted from multiple depths:
+Fused **multi-depth DINOv2** (ViT) features with a manually constructed **CNN feature pyramid neck** to recover the spatial hierarchy that transformers lack natively.
 
-* Early block → texture & edge features
-* Middle block → object-level abstraction
-* Final block → global semantic reasoning
+- Features extracted from early, mid, and final transformer blocks — capturing texture, object structure, and global semantics respectively
+- Pyramid levels at 9×9 → 72×72 built from the 36×36 token grid
+- Per-scale segmentation heads with **deep supervision** improve rare-class gradient flow and boundary sharpness
 
-All outputs are reshaped to spatial feature maps:
-
-```
-[B, C, 36, 36]
-```
-
-This enables semantic hierarchy without changing spatial resolution.
+This bypasses the need for a conventional decoder by constructing spatial inductive bias explicitly from transformer patch tokens.
 
 ---
 
-## 3️⃣ CNN Feature Pyramid Neck
+## Loss & Training
 
-Vision Transformers do not natively provide spatial pyramids.
-We manually construct a hierarchical pyramid from the 36×36 feature map:
+Compound loss — **CrossEntropy + Dice + Focal** — to handle severe class imbalance across sparse terrain features (e.g., logs, flowers, rocks vs. dominant sky/landscape).
 
-* **P2 → 72×72** (upsampled)
-* **P3 → 36×36** (base)
-* **P4 → 18×18** (downsampled)
-* **P5 → 9×9** (downsampled)
+| Hyperparameter | Value |
+|---|---|
+| Input size | 512×512 |
+| Optimizer | AdamW |
+| Learning rate | 1e-4 |
+| Batch size | 8 |
 
-This:
-
-* Restores spatial inductive bias
-* Improves small-object recall
-* Enhances boundary precision
-* Enables deep supervision at multiple scales
+Augmentation pipeline (Albumentations): random crop, horizontal flip, brightness/contrast jitter, ImageNet normalization.
 
 ---
 
-## 4️⃣ Multi-Scale Segmentation Heads
+## Results
 
-Each pyramid level produces logits with deep supervision applied at multiple scales.
-
-This improves:
-
-* Gradient flow
-* Rare-class learning
-* Stability of transformer training
-* Reduction of semantic over-smoothing
-
-Final predictions are fused and upsampled to full resolution.
+| Metric | Value |
+|---|---|
+| Mean IoU (mIoU) | ~0.70 |
+| Pixel Accuracy | ~0.85 |
+| Inference Latency | ~4 ms/image |
+| Throughput | ~200 FPS |
 
 ---
 
-# 🌍 Dataset & Semantic Classes
+## Engineering
 
-The model segments 10 primary semantic classes:
-
-| ID    | Class Name     | Description               |
-| ----- | -------------- | ------------------------- |
-| 100   | Trees          | Tall vegetation           |
-| 200   | Lush Bushes    | Dense shrubs              |
-| 300   | Dry Grass      | Short vegetation          |
-| 500   | Dry Bushes     | Sparse shrubs             |
-| 550   | Ground Clutter | Walkable terrain / debris |
-| 600   | Flowers        | Flowering plants          |
-| 700   | Logs           | Fallen trees              |
-| 800   | Rocks          | Stones / boulders         |
-| 7100  | Landscape      | General terrain surface   |
-| 10000 | Sky            | Sky regions               |
-
-**Ground Clutter** is highlighted in red during visualization to emphasize walkable path regions.
-
----
-
-# ⚙ Training Configuration
-
-## Hyperparameters
-
-* **Input Size:** 512×512 crop
-* **Batch Size:** 8
-* **Epochs:** 50–100
-* **Optimizer:** AdamW
-* **Learning Rate:** 1e-4
-* **Weight Decay:** 1e-4
-
----
-
-## Loss Function
-
-Compound loss function:
-
-```
-Total Loss =
-    CrossEntropy
-  + Dice Loss
-  + Focal Loss
-```
-
-This combination improves:
-
-* Class imbalance handling
-* Boundary sharpness
-* Rare-class recovery
-* Small-object segmentation
-
----
-
-# 🔄 Data Augmentation
-
-```python
-A.Compose([
-    A.SmallestMaxSize(max_size=768),
-    A.RandomCrop(512, 512),
-    A.HorizontalFlip(p=0.5),
-    A.RandomBrightnessContrast(p=0.2),
-    A.Normalize(mean=(0.485, 0.456, 0.406),
-                std=(0.229, 0.224, 0.225)),
-])
-```
-
-This preserves scene context while maintaining effective transformer token density.
-
----
-
-# 📊 Evaluation Metrics
-
-## Primary Metric
-
-**Mean Intersection over Union (mIoU)**
-
-```
-IoU = Intersection / Union
-```
-
----
-
-## Additional Metrics
-
-* Pixel Accuracy
-* Per-Class IoU
-* Precision / Recall / F1
-* Confusion Matrix
-* Latency (ms per image)
-
----
-
-# 📈 Performance Summary (Representative)
-
-| Metric            | Value      |
-| ----------------- | ---------- |
-| Mean IoU          | ~0.69–0.70 |
-| Pixel Accuracy    | ~0.85      |
-| Inference Latency | ~4.7 ms    |
-| Throughput        | ~200 FPS   |
-
-The transformer backbone improves global consistency, while the CNN neck enhances fine-detail segmentation.
-
----
-
-# 🚀 Running the Model
-
-## Train
+- End-to-end training, evaluation, and checkpointing pipeline
+- Visualization tooling: segmentation overlays, per-class IoU plots, confusion matrices, input/GT/prediction comparisons
+- Latency benchmarking for deployment-readiness assessment
 
 ```bash
-python train.py
+python train.py          # Training
+python test.py           # Evaluation
+python visualize_segmentation.py  # Qualitative results
 ```
-
-## Test
-
-```bash
-python test.py
-```
-
-## Visualize Predictions
-
-```bash
-python visualize_segmentation.py
-```
-
-Outputs include:
-
-* Predicted segmentation masks
-* Confusion matrix
-* Per-class IoU plots
-* Input vs Ground Truth vs Prediction comparisons
 
 ---
 
-# 🧠 Why This Architecture Matters
+## Semantic Classes
 
-### Traditional U-Net
-
-* Strong locality
-* Limited global reasoning
-
-### Pure Transformer
-
-* Strong global context
-* Weak spatial hierarchy
-
-### Our Hybrid Model
-
-* Global semantic attention
-* Local convolutional refinement
-* Multi-scale supervision
-* Rare-class sensitivity
-* Real-time deployment capability
-
----
-
-# 🔬 Technical Contribution
-
-This project demonstrates:
-
-* Practical integration of self-supervised ViT backbones
-* Manual spatial pyramid construction for transformer segmentation
-* Hybrid architectural fusion for terrain perception
-* Efficient GPU deployment-ready inference
-
----
-
+| ID | Class |
+|---|---|
+| 100 | Trees |
+| 200 | Lush Bushes |
+| 300 | Dry Grass |
+| 500 | Dry Bushes |
+| 550 | Ground Clutter *(walkable path — highlighted)* |
+| 600 | Flowers |
+| 700 | Logs |
+| 800 | Rocks |
+| 7100 | Landscape |
+| 10000 | Sky |
